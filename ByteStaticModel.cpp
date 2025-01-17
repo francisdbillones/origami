@@ -2,49 +2,52 @@
 #include <iostream>
 #include <vector>
 
-typedef struct frac {
-  uint64_t num;
-  uint64_t dem;
+typedef struct prob {
+  uint64_t low;
+  uint64_t high;
+  uint64_t count;
 } frac;
-
 class ByteStaticModel {
 private:
-  frac probabilities[256];
-  frac cumulative_probabilities[256];
+  uint64_t cumulative_probabilities[258];
+  bool frozen;
+  int freq_bits;
 
 public:
-  uint64_t count;
-  ByteStaticModel(const std::vector<uint8_t> &bytes, frac smoothing_constant) {
-    uint64_t freqs[256] = {0};
-    for (uint8_t byte : bytes) {
-      freqs[byte]++;
-    }
+  ByteStaticModel(const int freq_bits) {
+    this->freq_bits = freq_bits;
+    this->frozen = false;
 
-    for (int i = 0; i < 256; ++i) {
-      probabilities[i] = {freqs[i], bytes.size()};
+    for (int i = 0; i < 258; ++i) {
+      this->cumulative_probabilities[i] = i;
     }
-    cumulative_probabilities[0] = probabilities[0];
-    for (int i = 1; i < 256; i++) {
-      cumulative_probabilities[i] = {cumulative_probabilities[i - 1].num +
-                                         probabilities[i].num,
-                                     bytes.size()};
-    }
-
-    count = bytes.size();
   }
 
-  frac get_probability(uint8_t byte) const {
-    return cumulative_probabilities[byte];
+  prob get_probability(const int byte) const {
+    return {this->cumulative_probabilities[byte],
+            this->cumulative_probabilities[byte + 1],
+            this->cumulative_probabilities[257]};
   }
-  std::pair<uint8_t, std::pair<frac, frac>>
-  get_byte_and_range(uint64_t prob) const {
-    if (prob < cumulative_probabilities[0].num) {
-      return {0, {{0, count}, cumulative_probabilities[0]}};
-    }
-    for (int i = 1; i < 256; ++i) {
-      if (prob < cumulative_probabilities[i].num)
+  std::pair<int, prob> get_byte_and_range(uint64_t value) const {
+    for (int i = 0; i < 257; i++) {
+      if (value < this->cumulative_probabilities[i + 1]) {
         return {i,
-                {cumulative_probabilities[i - 1], cumulative_probabilities[i]}};
-    };
+                {this->cumulative_probabilities[i],
+                 this->cumulative_probabilities[i + 1], get_count()}};
+      }
+    }
   }
+
+  bool update(int byte) {
+    if (this->frozen)
+      return false;
+    for (int i = byte + 1; i < 258; ++i)
+      this->cumulative_probabilities[i]++;
+
+    if (this->cumulative_probabilities[257] >= ((1ULL << this->freq_bits) - 1))
+      frozen = true;
+    return true;
+  }
+
+  uint64_t get_count() const { return this->cumulative_probabilities[257]; }
 };
