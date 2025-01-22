@@ -1,12 +1,17 @@
 # Compiler and flags
 CXX = g++
-CXXFLAGS = -Wall -Wextra -std=c++17 -O3
+CXXFLAGS = -Wall -Wextra -O3 -std=c++17
 
-TARGET = run
+all: compress decompress profile
 
-SRCS = arithmetic_coding.cpp ByteStaticModel.cpp
+compress: compress.cpp arithmetic_coding.cpp byte_static_model.cpp
+	$(CXX) $(CXXFLAGS) compress.cpp -o compress
 
-OBJS = $(SRCS:.cpp=.o)
+decompress: decompress.cpp arithmetic_coding.cpp byte_static_model.cpp
+	$(CXX) $(CXXFLAGS) decompress.cpp -o decompress
 
-$(TARGET): $(OBJS)
-	$(CXX) $(CXXFLAGS) -o $@ $(OBJS)
+profile: profile.cpp arithmetic_coding.cpp byte_static_model.cpp
+	$(CXX) $(CXXFLAGS) profile.cpp -o profile
+
+clean:
+	rm -f compress decompress profile *.o
