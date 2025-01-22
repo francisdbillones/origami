@@ -31,11 +31,12 @@ public:
     uint16_t byte;
     while (1) {
       input.get((char &)byte);
-      if (input.eof()) {
+      if (input.eof())
         byte = model.EOF_BYTE;
-      }
+
       auto value = model.get_probability(byte);
       model.update(byte);
+
       uint64_t range = high - low + 1;
       high = low + ((range * value.high) / value.count) - 1;
       low = low + ((range * value.low) / value.count);
@@ -43,13 +44,11 @@ public:
       while (1) {
         if (high < HALF) {
           writer.write_bit(0);
-          for (int i = 0; i < pending_bits; i++)
-            writer.write_bit(1);
+          writer.write_n_bits((1 << pending_bits) - 1, pending_bits);
           pending_bits = 0;
         } else if (low >= HALF) {
           writer.write_bit(1);
-          for (int i = 0; i < pending_bits; i++)
-            writer.write_bit(0);
+          writer.write_n_bits(0, pending_bits);
           pending_bits = 0;
         } else if (low >= ONE_FOURTH && high < THREE_FOURTHS) {
           pending_bits++;
@@ -71,12 +70,10 @@ public:
     pending_bits++;
     if (low < ONE_FOURTH) {
       writer.write_bit(0);
-      for (int i = 0; i < pending_bits; i++)
-        writer.write_bit(1);
+      writer.write_n_bits((1 << pending_bits) - 1, pending_bits);
     } else {
       writer.write_bit(1);
-      for (int i = 0; i < pending_bits; i++)
-        writer.write_bit(0);
+      writer.write_n_bits(0, pending_bits);
     }
 
     writer.clean();
@@ -90,17 +87,16 @@ public:
     uint64_t value = 0;
     value = reader.read_n_bits(CODE_BITS);
 
-    while (true) {
+    while (1) {
       uint64_t range = high - low + 1;
       uint64_t scaled_value =
           ((value - low + 1) * model.get_count() - 1) / range;
 
       auto [byte, prob] = model.get_byte_and_range(scaled_value);
-      if (byte == model.EOF_BYTE) {
+      if (byte == model.EOF_BYTE)
         break;
-      }
-      model.update(byte);
 
+      model.update(byte);
       output.put(byte);
 
       high = low + (range * prob.high) / prob.count - 1;

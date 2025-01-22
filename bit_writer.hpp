@@ -41,17 +41,18 @@ public:
     }
   }
 
-  //   void write_n_bits(uint64_t bits, int n) {
-  //     if (n > 64)
-  //       throw std::runtime_error("Cannot write more than 64 bits");
-  //     int bits_to_write = std::min(n, 64 - bits_in_buffer);
-  //     buffer = (buffer << bits_to_write) | (bits >> (n - bits_to_write));
-  //     bits_in_buffer += bits_to_write;
-  //     if (bits_in_buffer == 64)
-  //       flush_buffer();
-  //     write_n_bits(bits & ((1ULL << (n - bits_to_write)) - 1), n -
-  //     bits_to_write);
-  //   }
+  void write_n_bits(uint64_t bits, int n) {
+    if (n > 64)
+      throw std::runtime_error("Cannot write more than 64 bits");
+    int bits_to_write = std::min(n, 64 - bits_in_buffer);
+    buffer = (buffer << bits_to_write) | (bits >> (n - bits_to_write));
+    bits_in_buffer += bits_to_write;
+    if (bits_in_buffer == 64)
+      flush_buffer();
+    if (bits_to_write != n)
+      write_n_bits(bits & ((1ULL << (n - bits_to_write)) - 1),
+                   n - bits_to_write);
+  }
 
   void clean() { flush_remaining(); }
 

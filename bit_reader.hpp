@@ -12,13 +12,12 @@ private:
 
   void fill_buffer() {
     while (bits_in_buffer < 64 && !eof) {
-      char byte;
-      if (input.get(byte)) {
-        buffer = (buffer << 8) | (uint8_t)byte;
+      uint8_t byte;
+      if (input.get((char &)byte)) {
+        buffer = (buffer << 8) | byte;
         bits_in_buffer += 8;
-      } else {
+      } else
         eof = true;
-      }
     }
   }
 
@@ -53,13 +52,11 @@ public:
   }
 
   int peek_bits(int n) {
-    if (n > bits_in_buffer) {
+    if (n > bits_in_buffer)
       fill_buffer();
-    }
-    if (n > bits_in_buffer) {
+    if (n > bits_in_buffer)
       return -1;
-    }
-    return (buffer >> (bits_in_buffer - n));
+    return buffer >> (bits_in_buffer - n);
   }
 
   void consume_bits(int n) {
