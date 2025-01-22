@@ -1,10 +1,13 @@
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstring>
 #include <fstream>
+#include <future>
 #include <iomanip>
 #include <iostream>
 #include <numeric>
+#include <sstream>
 #include <vector>
 
 #include "arithmetic_coding.cpp"
@@ -18,37 +21,60 @@ struct profile_result {
 
 void print_stats(const std::string &operation,
                  const std::vector<profile_result> &results) {
-  // calculate averages
   double avg_ratio = 0;
   double avg_speed = 0;
   double avg_time_ms = 0;
   int success_count = 0;
 
+  std::vector<double> ratios;
+  std::vector<double> speeds;
+  std::vector<double> times;
+
   for (const auto &r : results) {
     if (!r.success)
       continue;
     success_count++;
-    avg_ratio += static_cast<double>(r.output_size) / r.input_size;
-    avg_speed +=
+    double ratio = static_cast<double>(r.output_size) / r.input_size;
+    double speed =
         (r.input_size * 1000000.0) / (r.duration.count() * 1024 * 1024);
-    avg_time_ms += r.duration.count() / 1000.0;
+    double time = r.duration.count() / 1000.0;
+
+    ratios.push_back(ratio);
+    speeds.push_back(speed);
+    times.push_back(time);
+
+    avg_ratio += ratio;
+    avg_speed += speed;
+    avg_time_ms += time;
   }
 
   if (success_count > 0) {
     avg_ratio /= success_count;
     avg_speed /= success_count;
     avg_time_ms /= success_count;
-  }
 
-  std::cout << operation << " Statistics:\n"
-            << "  Success rate: " << success_count << "/" << results.size()
-            << "\n"
-            << "  Average ratio: " << std::fixed << std::setprecision(4)
-            << avg_ratio << "\n"
-            << "  Average speed: " << std::fixed << std::setprecision(2)
-            << avg_speed << " MB/s\n"
-            << "  Average time: " << std::fixed << std::setprecision(2)
-            << avg_time_ms << " ms\n\n";
+    auto calc_stddev = [](const std::vector<double> &vals, double mean) {
+      double sum = 0;
+      for (double v : vals) {
+        sum += (v - mean) * (v - mean);
+      }
+      return std::sqrt(sum / vals.size());
+    };
+
+    double ratio_stddev = calc_stddev(ratios, avg_ratio);
+    double speed_stddev = calc_stddev(speeds, avg_speed);
+    double time_stddev = calc_stddev(times, avg_time_ms);
+
+    std::cout << operation << " Statistics:\n"
+              << "  Success rate: " << success_count << "/" << results.size()
+              << "\n"
+              << "  Ratio: " << std::fixed << std::setprecision(4) << avg_ratio
+              << " ± " << ratio_stddev << "\n"
+              << "  Speed: " << std::fixed << std::setprecision(2) << avg_speed
+              << " ± " << speed_stddev << " MB/s\n"
+              << "  Time: " << std::fixed << std::setprecision(2) << avg_time_ms
+              << " ± " << time_stddev << " ms\n\n";
+  }
 }
 
 size_t get_file_size(const std::string &filename) {
@@ -75,7 +101,7 @@ bool verify_files(const std::string &original, const std::string &decoded) {
     f1.read(buf1.data(), buf1.size());
     f2.read(buf2.data(), buf2.size());
 
-    auto count1 = f1.gcount();
+    auto count1 = static_cast<size_t>(f1.gcount());
     auto count2 = f2.gcount();
 
     if (count1 != count2) {
@@ -113,28 +139,24 @@ bool verify_files(const std::string &original, const std::string &decoded) {
 }
 
 profile_result run_compression(arithmetic_coder<32, 16> &coder,
-                               const std::string &input_file,
-                               const std::string &output_file) {
+                               const std::vector<char> &input_data,
+                               std::vector<char> &output_data) {
   profile_result result{};
-  result.input_size = get_file_size(input_file);
+  result.input_size = input_data.size();
 
   coder.reset();
 
-  std::ifstream input(input_file, std::ios::binary);
-  std::ofstream output(output_file, std::ios::binary);
-
-  if (!input || !output || result.input_size == 0) {
-    result.success = false;
-    return result;
-  }
-
   auto start = std::chrono::high_resolution_clock::now();
-  coder.encode(input, output);
-  output.flush();
-  output.close();
+
+  std::stringstream input_stream, output_stream;
+  input_stream.write(input_data.data(), input_data.size());
+  coder.encode(input_stream, output_stream);
+
   auto end = std::chrono::high_resolution_clock::now();
 
-  result.output_size = get_file_size(output_file);
+  output_data =
+      std::vector<char>(std::istreambuf_iterator<char>(output_stream), {});
+  result.output_size = output_data.size();
   result.duration =
       std::chrono::duration_cast<std::chrono::microseconds>(end - start);
   result.success = true;
@@ -143,28 +165,24 @@ profile_result run_compression(arithmetic_coder<32, 16> &coder,
 }
 
 profile_result run_decompression(arithmetic_coder<32, 16> &coder,
-                                 const std::string &input_file,
-                                 const std::string &output_file) {
+                                 const std::vector<char> &input_data,
+                                 std::vector<char> &output_data) {
   profile_result result{};
-  result.input_size = get_file_size(input_file);
+  result.input_size = input_data.size();
 
   coder.reset();
 
-  std::ifstream input(input_file, std::ios::binary);
-  std::ofstream output(output_file, std::ios::binary);
-
-  if (!input || !output || result.input_size == 0) {
-    result.success = false;
-    return result;
-  }
-
   auto start = std::chrono::high_resolution_clock::now();
-  coder.decode(input, output);
-  output.flush();
-  output.close();
+
+  std::stringstream input_stream, output_stream;
+  input_stream.write(input_data.data(), input_data.size());
+  coder.decode(input_stream, output_stream);
+
   auto end = std::chrono::high_resolution_clock::now();
 
-  result.output_size = get_file_size(output_file);
+  output_data =
+      std::vector<char>(std::istreambuf_iterator<char>(output_stream), {});
+  result.output_size = output_data.size();
   result.duration =
       std::chrono::duration_cast<std::chrono::microseconds>(end - start);
   result.success = true;
@@ -172,43 +190,65 @@ profile_result run_decompression(arithmetic_coder<32, 16> &coder,
   return result;
 }
 
+bool verify_data(const std::vector<char> &original,
+                 const std::vector<char> &decoded) {
+  if (original.size() != decoded.size()) {
+    std::cerr << "Size mismatch: original " << original.size()
+              << " bytes, decoded " << decoded.size() << " bytes\n";
+    return false;
+  }
+
+  if (std::memcmp(original.data(), decoded.data(), original.size()) != 0) {
+    for (size_t i = 0; i < original.size(); i++) {
+      if (original[i] != decoded[i]) {
+        std::cerr << "First difference at byte " << i << ": " << std::hex
+                  << (int)(unsigned char)original[i] << " vs "
+                  << (int)(unsigned char)decoded[i] << std::dec << "\n";
+        break;
+      }
+    }
+    return false;
+  }
+
+  return true;
+}
+
 int main(int argc, char *argv[]) {
-  if (argc != 2) {
-    std::cerr << "usage: " << argv[0] << " <input_file>\n";
+  if (argc != 3) {
+    std::cerr << "usage: " << argv[0] << " <input_file> <num_runs>\n";
     return 1;
   }
 
-  const int NUM_RUNS = 5; // number of times to run each operation
+  const int NUM_RUNS = std::stoi(argv[2]);
   const std::string input_file = argv[1];
-  std::vector<profile_result> compression_results;
-  std::vector<profile_result> decompression_results;
-  std::vector<bool> verification_results;
+  std::vector<char> input_data;
+
+  // load file into memory
+  std::ifstream input(input_file, std::ios::binary);
+  if (!input) {
+    std::cerr << "failed to open input file\n";
+    return 1;
+  }
+  input_data = std::vector<char>(std::istreambuf_iterator<char>(input), {});
+  input.close();
+
+  std::vector<profile_result> compression_results(NUM_RUNS);
+  std::vector<profile_result> decompression_results(NUM_RUNS);
+  std::vector<bool> verification_results(NUM_RUNS);
 
   arithmetic_coder<32, 16> coder;
-
   for (int i = 0; i < NUM_RUNS; i++) {
-    std::string compressed_file =
-        input_file + ".compressed." + std::to_string(i);
-    std::string decompressed_file =
-        input_file + ".decompressed." + std::to_string(i);
+    std::vector<char> compressed_data, decompressed_data;
 
-    auto comp_result = run_compression(coder, input_file, compressed_file);
-    compression_results.push_back(comp_result);
-
-    if (comp_result.success) {
-      auto decomp_result =
-          run_decompression(coder, compressed_file, decompressed_file);
-      decompression_results.push_back(decomp_result);
-
-      if (decomp_result.success) {
-        verification_results.push_back(
-            verify_files(input_file, decompressed_file));
+    compression_results[i] =
+        run_compression(coder, input_data, compressed_data);
+    if (compression_results[i].success) {
+      decompression_results[i] =
+          run_decompression(coder, compressed_data, decompressed_data);
+      if (decompression_results[i].success) {
+        verification_results[i] = verify_data(input_data, decompressed_data);
       }
     }
-
-    // cleanup
-    std::remove(compressed_file.c_str());
-    std::remove(decompressed_file.c_str());
   }
 
   print_stats("Compression", compression_results);

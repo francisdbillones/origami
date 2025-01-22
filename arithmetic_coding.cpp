@@ -22,7 +22,8 @@ private:
 public:
   arithmetic_coder() : model() {}
 
-  void encode(std::ifstream &input, std::ofstream &output) {
+  template <typename IStream, typename OStream>
+  void encode(IStream &input, OStream &output) {
     bit_writer writer(output);
     uint64_t low = 0;
     uint64_t high = MAX_CODE;
@@ -38,8 +39,13 @@ public:
       model.update(byte);
 
       uint64_t range = high - low + 1;
-      high = low + ((range * value.high) / value.count) - 1;
-      low = low + ((range * value.low) / value.count);
+      if (model.normalized) {
+        high = low + ((range * value.high) >> FREQ_BITS) - 1;
+        low = low + ((range * value.low) >> FREQ_BITS);
+      } else {
+        high = low + ((range * value.high) / value.count) - 1;
+        low = low + ((range * value.low) / value.count);
+      }
 
       while (1) {
         if (high < HALF) {
@@ -79,7 +85,8 @@ public:
     writer.clean();
   }
 
-  void decode(std::ifstream &input, std::ofstream &output) {
+  template <typename IStream, typename OStream>
+  void decode(IStream &input, OStream &output) {
     bit_reader reader(input);
 
     uint64_t high = MAX_CODE;
@@ -99,8 +106,13 @@ public:
       model.update(byte);
       output.put(byte);
 
-      high = low + (range * prob.high) / prob.count - 1;
-      low = low + (range * prob.low) / prob.count;
+      if (model.normalized) {
+        high = low + ((range * prob.high) >> FREQ_BITS) - 1;
+        low = low + ((range * prob.low) >> FREQ_BITS);
+      } else {
+        high = low + ((range * prob.high) / prob.count) - 1;
+        low = low + ((range * prob.low) / prob.count);
+      }
 
       while (1) {
         if (high < HALF) {

@@ -5,56 +5,34 @@
 
 class bit_writer {
 private:
-  std::ofstream &output;
-  uint64_t buffer = 0;
-  int bits_in_buffer = 0;
-
-  // assumes we're flushing with a multiple of 8 bits
-  void flush_buffer() {
-    for (int i = 0; i < bits_in_buffer / 8; i++) {
-      uint8_t byte = buffer >> (bits_in_buffer - 8 * (i + 1));
-      output.put(byte);
-      buffer &= (1ULL << bits_in_buffer) - 1;
-    }
-    // this will be wrong if we're not flushing with a multiple of 8 bits
-    bits_in_buffer = 0;
-  }
-
-  void flush_remaining() {
-    // pad remaining bits with zeros and flush
-    if (bits_in_buffer > 0) {
-      buffer <<= 8 - (bits_in_buffer % 8);
-      bits_in_buffer += 8 - (bits_in_buffer % 8);
-      flush_buffer();
-    }
-  }
+  std::ostream &output;
+  uint8_t buffer;
+  int bits_used;
 
 public:
-  explicit bit_writer(std::ofstream &out) : output(out) {}
+  bit_writer(std::ostream &out) : output(out), buffer(0), bits_used(0) {}
 
-  void write_bit(bool bit) {
-    buffer = (buffer << 1) | bit;
-    bits_in_buffer++;
+  void write_bit(uint8_t bit) {
+    buffer = (buffer << 1) | (bit & 1);
+    bits_used++;
 
-    if (bits_in_buffer == 64) {
-      flush_buffer();
+    if (bits_used == 8) {
+      output.put(static_cast<char>(buffer));
+      buffer = 0;
+      bits_used = 0;
     }
   }
 
   void write_n_bits(uint64_t bits, int n) {
-    if (n > 64)
-      throw std::runtime_error("Cannot write more than 64 bits");
-    int bits_to_write = std::min(n, 64 - bits_in_buffer);
-    buffer = (buffer << bits_to_write) | (bits >> (n - bits_to_write));
-    bits_in_buffer += bits_to_write;
-    if (bits_in_buffer == 64)
-      flush_buffer();
-    if (bits_to_write != n)
-      write_n_bits(bits & ((1ULL << (n - bits_to_write)) - 1),
-                   n - bits_to_write);
+    for (int i = n - 1; i >= 0; i--) {
+      write_bit((bits >> i) & 1);
+    }
   }
 
-  void clean() { flush_remaining(); }
-
-  ~bit_writer() { clean(); }
+  void clean() {
+    if (bits_used > 0) {
+      buffer <<= (8 - bits_used);
+      output.put(static_cast<char>(buffer));
+    }
+  }
 };

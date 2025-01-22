@@ -5,69 +5,55 @@
 
 class bit_reader {
 private:
-  std::ifstream &input;
-  uint64_t buffer = 0;
-  int bits_in_buffer = 0;
-  bool eof = false;
-
-  void fill_buffer() {
-    while (bits_in_buffer < 64 && !eof) {
-      uint8_t byte;
-      if (input.get((char &)byte)) {
-        buffer = (buffer << 8) | byte;
-        bits_in_buffer += 8;
-      } else
-        eof = true;
-    }
-  }
+  std::istream &input;
+  uint8_t buffer;
+  int bits_remaining;
 
 public:
-  explicit bit_reader(std::ifstream &in) : input(in) { fill_buffer(); }
+  bit_reader(std::istream &in) : input(in), buffer(0), bits_remaining(0) {}
 
-  int read_bit() {
-    if (bits_in_buffer == 0) {
-      fill_buffer();
-      if (bits_in_buffer == 0)
-        return -1;
+  uint8_t read_bit() {
+    if (bits_remaining == 0) {
+      char c;
+      input.get(c);
+      buffer = static_cast<uint8_t>(c);
+      bits_remaining = 8;
     }
 
-    bool bit = (buffer >> (bits_in_buffer - 1)) & 1;
-    bits_in_buffer--;
-    buffer &= (1ULL << bits_in_buffer) - 1;
+    uint8_t bit = (buffer >> (bits_remaining - 1)) & 1;
+    bits_remaining--;
     return bit;
   }
 
-  int read_n_bits(int n) {
-    int result = 0;
-    if (n > bits_in_buffer)
-      fill_buffer();
-
-    if (n > bits_in_buffer)
-      return -1;
-
-    result = (buffer >> (bits_in_buffer - n)) & ((1ULL << n) - 1);
-    bits_in_buffer -= n;
-    buffer &= (1ULL << bits_in_buffer) - 1;
+  uint64_t read_n_bits(int n) {
+    uint64_t result = 0;
+    for (int i = 0; i < n; i++) {
+      result = (result << 1) | read_bit();
+    }
     return result;
   }
 
   int peek_bits(int n) {
-    if (n > bits_in_buffer)
-      fill_buffer();
-    if (n > bits_in_buffer)
+    if (n > bits_remaining) {
+      char c;
+      input.get(c);
+      buffer = static_cast<uint8_t>(c);
+      bits_remaining = 8;
+    }
+    if (n > bits_remaining)
       return -1;
-    return buffer >> (bits_in_buffer - n);
+    return buffer >> (bits_remaining - n);
   }
 
   void consume_bits(int n) {
-    if (n > bits_in_buffer) {
-      bits_in_buffer = 0;
+    if (n > bits_remaining) {
+      bits_remaining = 0;
       buffer = 0;
     } else {
-      bits_in_buffer -= n;
-      buffer &= (1ULL << bits_in_buffer) - 1;
+      bits_remaining -= n;
+      buffer &= (1ULL << bits_remaining) - 1;
     }
   }
 
-  bool at_eof() const { return eof && bits_in_buffer == 0; }
+  bool at_eof() const { return input.eof() && bits_remaining == 0; }
 };
