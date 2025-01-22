@@ -102,7 +102,7 @@ bool verify_files(const std::string &original, const std::string &decoded) {
     f2.read(buf2.data(), buf2.size());
 
     auto count1 = static_cast<size_t>(f1.gcount());
-    auto count2 = f2.gcount();
+    auto count2 = static_cast<size_t>(f2.gcount());
 
     if (count1 != count2) {
       std::cerr << "Size mismatch: original read " << count1

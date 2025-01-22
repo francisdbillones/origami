@@ -19,9 +19,9 @@ public:
   static constexpr uint16_t EOF_BYTE = 0xFF;
   byte_static_model() { reset(); }
 
-  prob get_probability(const uint8_t byte) const {
+  inline prob get_probability(const uint8_t byte) const {
     return {cumulative_probabilities[byte], cumulative_probabilities[byte + 1],
-            cumulative_probabilities[257]};
+            get_count()};
   }
   std::pair<uint64_t, prob> get_byte_and_range(const uint64_t value) const {
     int left = 0;
@@ -34,9 +34,7 @@ public:
         right = mid;
     }
 
-    return {left,
-            {cumulative_probabilities[left], cumulative_probabilities[left + 1],
-             get_count()}};
+    return {left, get_probability(left)};
   }
 
   void reset() {

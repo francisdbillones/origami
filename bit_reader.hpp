@@ -33,7 +33,7 @@ public:
     return result;
   }
 
-  int peek_bits(int n) {
+  uint64_t peek_bits(int n) {
     if (n > bits_remaining) {
       char c;
       input.get(c);
