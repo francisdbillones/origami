@@ -130,9 +130,10 @@ profile_result run_compression(arithmetic_coder<32, 16> &coder,
 
   auto start = std::chrono::high_resolution_clock::now();
   coder.encode(input, output);
+  output.flush();
+  output.close();
   auto end = std::chrono::high_resolution_clock::now();
 
-  output.close();
   result.output_size = get_file_size(output_file);
   result.duration =
       std::chrono::duration_cast<std::chrono::microseconds>(end - start);
@@ -159,9 +160,10 @@ profile_result run_decompression(arithmetic_coder<32, 16> &coder,
 
   auto start = std::chrono::high_resolution_clock::now();
   coder.decode(input, output);
+  output.flush();
+  output.close();
   auto end = std::chrono::high_resolution_clock::now();
 
-  output.close();
   result.output_size = get_file_size(output_file);
   result.duration =
       std::chrono::duration_cast<std::chrono::microseconds>(end - start);

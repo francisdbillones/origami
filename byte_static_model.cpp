@@ -48,7 +48,7 @@ public:
     for (int i = byte + 1; i < 258; ++i)
       cumulative_probabilities[i]++;
 
-    if (cumulative_probabilities[257] >= MAX_FREQ)
+    if (get_count() >= MAX_FREQ)
       frozen = true;
     return true;
   }
