@@ -25,18 +25,20 @@ public:
 
   prob get_probability(const SYMBOL byte) const {
     return {cumulative_probabilities[byte], cumulative_probabilities[byte + 1],
-            cumulative_probabilities[257]};
+            get_count()};
   }
   std::pair<uint64_t, prob> get_byte_and_range(const uint64_t value) const {
-    int i;
-    for (i = 0; i < 257; i++) {
-      if (value < cumulative_probabilities[i + 1])
-        break;
+    int left = 0;
+    int right = 257;
+    while (left + 1 < right) {
+      int mid = (left + right) / 2;
+      if (cumulative_probabilities[mid] <= value)
+        left = mid;
+      else
+        right = mid;
     }
 
-    return {i,
-            {cumulative_probabilities[i], cumulative_probabilities[i + 1],
-             get_count()}};
+    return {left, get_probability(left)};
   }
 
   void reset() {

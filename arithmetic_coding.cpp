@@ -22,7 +22,8 @@ private:
 public:
   arithmetic_coder() : model() {}
 
-  void encode(std::ifstream &input, std::ofstream &output) {
+  template <typename IStream, typename OStream>
+  void encode(IStream &input, OStream &output) {
     bit_writer writer(output);
     uint64_t low = 0;
     uint64_t high = MAX_CODE;
@@ -85,7 +86,8 @@ public:
     writer.clean();
   }
 
-  void decode(std::ifstream &input, std::ofstream &output) {
+  template <typename IStream, typename OStream>
+  void decode(IStream &input, OStream &output) {
     bit_reader reader(input);
 
     uint64_t high = MAX_CODE;
