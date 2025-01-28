@@ -8,18 +8,22 @@ typedef struct prob {
   uint64_t count;
 } prob;
 
+typedef uint16_t SYMBOL;
+
 template <int FREQ_BITS> class byte_static_model {
 private:
   uint64_t cumulative_probabilities[258];
-  bool frozen;
 
   static constexpr uint64_t MAX_FREQ = (1ULL << FREQ_BITS) - 1;
+  bool freeze_next_update;
 
 public:
-  static constexpr uint16_t EOF_BYTE = 0xFF;
+  bool frozen;
+
+  static constexpr SYMBOL EOF_SYMBOL = 256;
   byte_static_model() { reset(); }
 
-  prob get_probability(const uint8_t byte) const {
+  prob get_probability(const SYMBOL byte) const {
     return {cumulative_probabilities[byte], cumulative_probabilities[byte + 1],
             cumulative_probabilities[257]};
   }
@@ -37,21 +41,31 @@ public:
 
   void reset() {
     frozen = false;
+    freeze_next_update = false;
 
     for (int i = 0; i < 258; ++i)
       cumulative_probabilities[i] = i;
   }
 
-  bool update(const uint8_t byte) {
-    if (this->frozen)
+  bool update(const SYMBOL byte) {
+    if (frozen)
       return false;
     for (int i = byte + 1; i < 258; ++i)
       cumulative_probabilities[i]++;
 
-    if (get_count() >= MAX_FREQ)
+    if (freeze_next_update) {
       frozen = true;
+      freeze_next_update = false;
+    }
+    if (get_count() == MAX_FREQ)
+      freeze_next_update = true;
     return true;
   }
 
-  inline uint64_t get_count() const { return cumulative_probabilities[257]; }
+  inline uint64_t get_count() const {
+    if (frozen)
+      return 1ULL << FREQ_BITS;
+    else
+      return cumulative_probabilities[257];
+  }
 };

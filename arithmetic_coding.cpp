@@ -28,18 +28,24 @@ public:
     uint64_t high = MAX_CODE;
     int pending_bits = 0;
 
-    uint16_t byte;
+    SYMBOL byte;
     while (1) {
       input.get((char &)byte);
       if (input.eof())
-        byte = model.EOF_BYTE;
+        byte = model.EOF_SYMBOL;
 
       auto value = model.get_probability(byte);
       model.update(byte);
 
       uint64_t range = high - low + 1;
-      high = low + ((range * value.high) / value.count) - 1;
-      low = low + ((range * value.low) / value.count);
+
+      if (model.frozen) {
+        high = low + ((range * value.high) >> FREQ_BITS) - 1;
+        low = low + ((range * value.low) >> FREQ_BITS);
+      } else {
+        high = low + ((range * value.high) / (model.get_count() - 1)) - 1;
+        low = low + ((range * value.low) / (model.get_count() - 1));
+      }
 
       while (1) {
         if (high < HALF) {
@@ -63,7 +69,7 @@ public:
         low &= MAX_CODE;
       }
 
-      if (byte == model.EOF_BYTE)
+      if (byte == model.EOF_SYMBOL)
         break;
     }
 
@@ -93,14 +99,19 @@ public:
           ((value - low + 1) * model.get_count() - 1) / range;
 
       auto [byte, prob] = model.get_byte_and_range(scaled_value);
-      if (byte == model.EOF_BYTE)
+      if (byte == model.EOF_SYMBOL)
         break;
 
       model.update(byte);
       output.put(byte);
 
-      high = low + (range * prob.high) / prob.count - 1;
-      low = low + (range * prob.low) / prob.count;
+      if (model.frozen) {
+        high = low + ((range * prob.high) >> FREQ_BITS) - 1;
+        low = low + ((range * prob.low) >> FREQ_BITS);
+      } else {
+        high = low + (range * prob.high) / (model.get_count() - 1) - 1;
+        low = low + (range * prob.low) / (model.get_count() - 1);
+      }
 
       while (1) {
         if (high < HALF) {
